@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Enquiry Form - Shree Netralay</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: #f4f6f9;
+    }
+    h2 { margin-bottom: 10px; }
+    form {
+      background: #fff;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+      max-width: 500px;
+      margin: auto;
+    }
+    label { display: block; margin-top: 12px; }
+    input, select {
+      width: 100%;
+      padding: 8px;
+      margin-top: 4px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
+    button {
+      margin-top: 18px;
+      padding: 10px 16px;
+      border: none;
+      border-radius: 6px;
+      background: #007bff;
+      color: white;
+      cursor: pointer;
+      font-size: 15px;
+    }
+    button:hover { background: #0056b3; }
+
+    /* Processing overlay */
+    #overlay {
+      position: fixed; top:0; left:0; right:0; bottom:0;
+      background: rgba(255,255,255,0.8);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      z-index: 1000;
+    }
+    .spinner {
+      border: 6px solid #eee;
+      border-top: 6px solid #007bff;
+      border-radius: 50%;
+      width: 50px; height: 50px;
+      animation: spin 1s linear infinite;
+      margin-bottom: 12px;
+    }
+    @keyframes spin { 100% { transform: rotate(360deg); } }
+
+    #result {
+      margin-top: 20px;
+      text-align: center;
+    }
+    #whatsappBtn {
+      background: #25D366;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h2>Enquiry Form</h2>
+
+  <form id="enquiryForm">
+    <label>Date
+      <input type="date" id="date" required>
+    </label>
+    <label>Patient Name
+      <input type="text" id="patientName" required>
+    </label>
+    <label>Age
+      <input type="number" id="age" min="0" required>
+    </label>
+    <label>Sex
+      <select id="sex" required>
+        <option value="">-- Select --</option>
+        <option>Male</option>
+        <option>Female</option>
+        <option>Other</option>
+      </select>
+    </label>
+    <label>Service
+      <select id="service" required></select>
+    </label>
+    <label>Email (optional)
+      <input type="email" id="email">
+    </label>
+    <label>Mo No
+      <input type="tel" id="mobile" required>
+    </label>
+    <button type="submit">Submit</button>
+  </form>
+
+  <div id="overlay">
+    <div class="spinner"></div>
+    <div>Processing your enquiry...</div>
+  </div>
+
+  <div id="result"></div>
+
+  <script>
+    const API_URL = "https://script.google.com/macros/s/AKfycbxDbmcCwu2CnqoIGq3mgTBbqesnkGGbPOlw9nFvEJt5EkSbIUJcMNwQ2Xp1EBTKf_edEQ/exec";
+
+    const serviceSelect = document.getElementById("service");
+    const form = document.getElementById("enquiryForm");
+    const overlay = document.getElementById("overlay");
+    const resultDiv = document.getElementById("result");
+
+    // Set today's date by default
+    document.getElementById("date").valueAsDate = new Date();
+
+    // Load services from API
+    async function loadServices() {
+      try {
+        const res = await fetch(API_URL + "?action=getInit", { mode: "cors" });
+        const data = await res.json();
+        if (data.success && data.services) {
+          data.services.forEach(s => {
+            const opt = document.createElement("option");
+            opt.value = s.service;
+            opt.textContent = `${s.service} (₹${s.charges})`;
+            serviceSelect.appendChild(opt);
+          });
+        }
+      } catch (err) {
+        alert("Failed to load services: " + err);
+      }
+    }
+
+    loadServices();
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      overlay.style.display = "flex";
+      resultDiv.innerHTML = "";
+
+      const payload = {
+        date: document.getElementById("date").value,
+        patientName: document.getElementById("patientName").value,
+        age: document.getElementById("age").value,
+        sex: document.getElementById("sex").value,
+        service: document.getElementById("service").value,
+        email: document.getElementById("email").value,
+        mobile: document.getElementById("mobile").value
+      };
+
+      try {
+        const res = await fetch(API_URL, {
+          method: "POST",
+          mode: "cors",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "submitEnquiry", payload })
+        });
+        const data = await res.json();
+
+        overlay.style.display = "none";
+
+        if (data.success) {
+          // Auto-download PDF
+          const link = document.createElement("a");
+          link.href = data.fileDirect + "&export=download";
+          link.download = data.enquiryId + "_receipt.pdf";
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+
+          resultDiv.innerHTML = `
+            <h3>Enquiry Submitted Successfully ✅</h3>
+            <p>Your Enquiry ID: <b>${data.enquiryId}</b></p>
+            <p>Please show this receipt at the counter.</p>
+            <button onclick="window.open('${data.fileDirect}&export=download','_blank')">Download Receipt</button>
+            <button id="whatsappBtn" onclick="window.open('${data.whatsapp}','_blank')">Get on WhatsApp</button>
+          `;
+        } else {
+          resultDiv.innerHTML = `<p style="color:red;">Error: ${data.message}</p>`;
+        }
+      } catch (err) {
+        overlay.style.display = "none";
+        resultDiv.innerHTML = `<p style="color:red;">Request failed: ${err}</p>`;
+      }
+    });
+  </script>
+</body>
+</html>
